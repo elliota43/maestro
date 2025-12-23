@@ -1,5 +1,6 @@
 mod manifest;
 mod registry;
+mod semver_compat;
 
 use manifest::ComposerManifest;
 use registry::RegistryClient;
@@ -22,22 +23,30 @@ async fn main() -> Result<()> {
     let client = RegistryClient::new();
 
     if let Some((pkg_name, version_constraint)) = manifest.require.iter().next() {
-        println!("Attempting to fetch metadata for dependency {} ({})", pkg_name, version_constraint);
+        println!("Resolving: {} ({})", pkg_name, version_constraint);
 
-        match client.get_package_metadata(pkg_name).await {
-            Ok(versions) => {
-                println!("Found {} released versions for {}", versions.len(), pkg_name);
+        let versions = client.get_package_metadata(pkg_name).await?;
 
-                for v in versions.iter().take(3) {
-                    println!("    - Version: {} (Normalized: {})", v.version, v.version_normalized);
-                }
+        println!("Filtering {} versions against contraint '{}'...", versions.len(), version_constraint);
+
+        let mut valid_versions: Vec<String> = versions.iter()
+            .filter(|v| {
+                semver_compat::version_matches(version_constraint, &v.version_normalized)
+            })
+            .map(|v| v.version.clone())
+            .collect();
+
+        valid_versions.reverse();
+
+        if valid_versions.is_empty() {
+            println!("No matching versions found!");
+        } else{
+            println!("Found {} matching versions:", valid_versions.len());
+            for v in valid_versions.iter().take(5) {
+                println!("    -{}", v);
             }
-            Err(e) => eprintln!("Error fetching package: {}", e),
         }
-    } else {
-        println!("No dependencies found in composer.json to test network fetch.");
     }
-
     Ok(())
 
 
