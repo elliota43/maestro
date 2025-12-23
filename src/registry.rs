@@ -9,7 +9,7 @@ pub struct PackagistResponse {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct PackageVersion {
-    pub name: String,
+    pub name: Option<String>,
     pub version: String,
 
     #[serde(alias = "version_normalized", default)]
