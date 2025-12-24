@@ -2,6 +2,7 @@ mod manifest;
 mod registry;
 mod semver_compat;
 mod installer;
+mod generator;
 
 use manifest::ComposerManifest;
 use registry::{RegistryClient, PackageVersion};
@@ -103,6 +104,10 @@ async fn main() -> Result<()> {
     }
 
     println!("{} All {} packages installed successfully!", "Success:".green().bold(), success_count);
+
+    // generate autoload
+    generator::generate_autoload("vendor")?;
+    println!("{} Autoload files generated:", "Success:".green().bold());
     Ok(())
 }
 
