@@ -5,16 +5,31 @@
   "content_hash": "TODO-hash-of-composer-json",
   "packages": [
     {
+      "name": "monolog/monolog",
+      "version": "3.9.0",
+      "version_normalized": "3.9.0.0",
+      "require": {
+        "psr/log": "^2.0 || ^3.0",
+        "php": ">=8.1"
+      },
+      "dist": {
+        "url": "https://api.github.com/repos/Seldaek/monolog/zipball/10d85740180ecba7896c87e06a166e0c95a0e3b6",
+        "type": "zip",
+        "reference": "10d85740180ecba7896c87e06a166e0c95a0e3b6",
+        "shasum": ""
+      }
+    },
+    {
       "name": "guzzlehttp/guzzle",
       "version": "7.10.0",
       "version_normalized": "7.10.0.0",
       "require": {
-        "ext-json": "*",
         "symfony/deprecation-contracts": "^2.2 || ^3.0",
-        "php": "^7.2.5 || ^8.0",
         "guzzlehttp/psr7": "^2.8",
-        "psr/http-client": "^1.0",
-        "guzzlehttp/promises": "^2.3"
+        "guzzlehttp/promises": "^2.3",
+        "php": "^7.2.5 || ^8.0",
+        "ext-json": "*",
+        "psr/http-client": "^1.0"
       },
       "dist": {
         "url": "https://api.github.com/repos/guzzle/guzzle/zipball/b51ac707cfa420b7bfd4e4d5e510ba8008e822b4",
@@ -24,17 +39,16 @@
       }
     },
     {
-      "name": "monolog/monolog",
-      "version": "2.10.0",
-      "version_normalized": "2.10.0.0",
+      "name": "psr/log",
+      "version": "3.0.2",
+      "version_normalized": "3.0.2.0",
       "require": {
-        "psr/log": "^1.0.1 || ^2.0 || ^3.0",
-        "php": ">=7.2"
+        "php": ">=8.0.0"
       },
       "dist": {
-        "url": "https://api.github.com/repos/Seldaek/monolog/zipball/5cf826f2991858b54d5c3809bee745560a1042a7",
+        "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
         "type": "zip",
-        "reference": "5cf826f2991858b54d5c3809bee745560a1042a7",
+        "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
         "shasum": ""
       }
     },
@@ -50,30 +64,15 @@
       "version": "2.8.0",
       "version_normalized": "2.8.0.0",
       "require": {
+        "psr/http-factory": "^1.0",
         "psr/http-message": "^1.1 || ^2.0",
-        "ralouphie/getallheaders": "^3.0",
         "php": "^7.2.5 || ^8.0",
-        "psr/http-factory": "^1.0"
+        "ralouphie/getallheaders": "^3.0"
       },
       "dist": {
         "url": "https://api.github.com/repos/guzzle/psr7/zipball/21dc724a0583619cd1652f673303492272778051",
         "type": "zip",
         "reference": "21dc724a0583619cd1652f673303492272778051",
-        "shasum": ""
-      }
-    },
-    {
-      "name": "psr/http-client",
-      "version": "1.0.3",
-      "version_normalized": "1.0.3.0",
-      "require": {
-        "php": "^7.0 || ^8.0",
-        "psr/http-message": "^1.0 || ^2.0"
-      },
-      "dist": {
-        "url": "https://api.github.com/repos/php-fig/http-client/zipball/bb5906edc1c324c9a05aa0873d40117941e5fa90",
-        "type": "zip",
-        "reference": "bb5906edc1c324c9a05aa0873d40117941e5fa90",
         "shasum": ""
       }
     },
@@ -92,16 +91,32 @@
       }
     },
     {
-      "name": "psr/log",
-      "version": "3.0.2",
-      "version_normalized": "3.0.2.0",
+      "name": "psr/http-client",
+      "version": "1.0.3",
+      "version_normalized": "1.0.3.0",
       "require": {
-        "php": ">=8.0.0"
+        "psr/http-message": "^1.0 || ^2.0",
+        "php": "^7.0 || ^8.0"
       },
       "dist": {
-        "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+        "url": "https://api.github.com/repos/php-fig/http-client/zipball/bb5906edc1c324c9a05aa0873d40117941e5fa90",
         "type": "zip",
-        "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+        "reference": "bb5906edc1c324c9a05aa0873d40117941e5fa90",
+        "shasum": ""
+      }
+    },
+    {
+      "name": "psr/http-factory",
+      "version": "1.1.0",
+      "version_normalized": "1.1.0.0",
+      "require": {
+        "php": ">=7.1",
+        "psr/http-message": "^1.0 || ^2.0"
+      },
+      "dist": {
+        "url": "https://api.github.com/repos/php-fig/http-factory/zipball/2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
+        "type": "zip",
+        "reference": "2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
         "shasum": ""
       }
     },
@@ -130,21 +145,6 @@
         "url": "https://api.github.com/repos/ralouphie/getallheaders/zipball/120b605dfeb996808c31b6477290a714d356e822",
         "type": "zip",
         "reference": "120b605dfeb996808c31b6477290a714d356e822",
-        "shasum": ""
-      }
-    },
-    {
-      "name": "psr/http-factory",
-      "version": "1.1.0",
-      "version_normalized": "1.1.0.0",
-      "require": {
-        "php": ">=7.1",
-        "psr/http-message": "^1.0 || ^2.0"
-      },
-      "dist": {
-        "url": "https://api.github.com/repos/php-fig/http-factory/zipball/2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
-        "type": "zip",
-        "reference": "2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
         "shasum": ""
       }
     }

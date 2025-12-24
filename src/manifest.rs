@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ComposerManifest {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -21,7 +21,7 @@ pub struct ComposerManifest {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct AutoloadConfig {
     #[serde(default, rename = "psr-4")]
     pub psr4: HashMap<String, String>, // "Monolog\\" => "src/"

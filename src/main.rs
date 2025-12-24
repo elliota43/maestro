@@ -30,6 +30,9 @@ struct Cli {
 enum Commands {
     Install,
     Update,
+    Add {
+        name: String
+    },
 }
 
 
@@ -41,6 +44,7 @@ async fn main() -> Result<()> {
     match cli.command.unwrap_or(Commands::Install) {
         Commands::Install => run_install().await?,
         Commands::Update => run_update().await?,
+        Commands::Add { name } => run_add(&name).await?,
     }
 
     Ok(())
@@ -170,4 +174,46 @@ async fn resolve_package(
 
     compatible_versions.sort_by(|a, b| a.1.cmp(&b.1));
     Ok(compatible_versions.last().map(|(pkg, _)| (**pkg).clone()))
+}
+
+async fn run_add(pkg_name: &str) -> Result<()> {
+    println!("{}", format!("Adding {}...", pkg_name).bold().cyan());
+
+    let client = RegistryClient::new();
+    let versions = client.get_package_metadata(pkg_name).await.context("Could not find package.")?;
+
+    // find latest STABLE version
+    let latest = versions.iter()
+        .filter(|v| {
+            let s = &v.version_normalized;
+            !s.contains("dev") && !s.contains("alpha") && !s.contains("beta") && !s.contains("RC")
+        })
+        .max_by_key(|v| to_rust_version(&v.version_normalized));
+
+    let target_version = match latest {
+        Some(v) => format!("^{}", v.version),
+        None => {
+            println!("{}", "Warning: No stable version found.  Using latest unstable.".yellow());
+            // fallback to latest if no stable exists
+            let v = versions.last().unwrap();
+            v.version.clone()
+        }
+    };
+
+    println!("    Selected version: {}", target_version.green());
+
+    // edit composer.json
+    let path = "composer.json";
+    let content = fs::read_to_string(path).context("Read composer.json failed")?;
+    let mut manifest: ComposerManifest = serde_json::from_str(&content)?;
+
+    // insert new requirement
+    manifest.require.insert(pkg_name.to_string(), target_version);
+
+    let new_content = serde_json::to_string_pretty(&manifest)?;
+    fs::write(path, new_content)?;
+
+    println!("{}", format!("Added {} to composer.json", pkg_name).green());
+
+    run_update().await
 }
