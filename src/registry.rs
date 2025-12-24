@@ -114,7 +114,7 @@ impl RegistryClient {
 
         let text = resp.text().await?;
 
-        let parsed: PackagistResponse = match serde_json::from_str(&text)?;
+        let parsed: PackagistResponse = serde_json::from_str(&text)?;
 
         let mut versions = parsed.packages
             .get(name)

@@ -5,31 +5,16 @@
   "content_hash": "TODO-hash-of-composer-json",
   "packages": [
     {
-      "name": null,
-      "version": "2.10.0",
-      "version_normalized": "2.10.0.0",
-      "require": {
-        "psr/log": "^1.0.1 || ^2.0 || ^3.0",
-        "php": ">=7.2"
-      },
-      "dist": {
-        "url": "https://api.github.com/repos/Seldaek/monolog/zipball/5cf826f2991858b54d5c3809bee745560a1042a7",
-        "type": "zip",
-        "reference": "5cf826f2991858b54d5c3809bee745560a1042a7",
-        "shasum": ""
-      }
-    },
-    {
       "name": "guzzlehttp/guzzle",
       "version": "7.10.0",
       "version_normalized": "7.10.0.0",
       "require": {
-        "php": "^7.2.5 || ^8.0",
-        "guzzlehttp/promises": "^2.3",
-        "guzzlehttp/psr7": "^2.8",
         "symfony/deprecation-contracts": "^2.2 || ^3.0",
-        "psr/http-client": "^1.0",
-        "ext-json": "*"
+        "guzzlehttp/psr7": "^2.8",
+        "ext-json": "*",
+        "guzzlehttp/promises": "^2.3",
+        "php": "^7.2.5 || ^8.0",
+        "psr/http-client": "^1.0"
       },
       "dist": {
         "url": "https://api.github.com/repos/guzzle/guzzle/zipball/b51ac707cfa420b7bfd4e4d5e510ba8008e822b4",
@@ -39,16 +24,41 @@
       }
     },
     {
-      "name": "psr/log",
-      "version": "3.0.2",
-      "version_normalized": "3.0.2.0",
+      "name": "monolog/monolog",
+      "version": "2.10.0",
+      "version_normalized": "2.10.0.0",
       "require": {
-        "php": ">=8.0.0"
+        "php": ">=7.2",
+        "psr/log": "^1.0.1 || ^2.0 || ^3.0"
       },
       "dist": {
-        "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+        "url": "https://api.github.com/repos/Seldaek/monolog/zipball/5cf826f2991858b54d5c3809bee745560a1042a7",
         "type": "zip",
-        "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+        "reference": "5cf826f2991858b54d5c3809bee745560a1042a7",
+        "shasum": ""
+      }
+    },
+    {
+      "name": "symfony/deprecation-contracts",
+      "version": "v3.6.0-BETA1",
+      "version_normalized": "3.6.0.0-beta1",
+      "require": {},
+      "dist": null
+    },
+    {
+      "name": "guzzlehttp/psr7",
+      "version": "2.8.0",
+      "version_normalized": "2.8.0.0",
+      "require": {
+        "psr/http-message": "^1.1 || ^2.0",
+        "php": "^7.2.5 || ^8.0",
+        "psr/http-factory": "^1.0",
+        "ralouphie/getallheaders": "^3.0"
+      },
+      "dist": {
+        "url": "https://api.github.com/repos/guzzle/psr7/zipball/21dc724a0583619cd1652f673303492272778051",
+        "type": "zip",
+        "reference": "21dc724a0583619cd1652f673303492272778051",
         "shasum": ""
       }
     },
@@ -67,30 +77,6 @@
       }
     },
     {
-      "name": "guzzlehttp/psr7",
-      "version": "2.8.0",
-      "version_normalized": "2.8.0.0",
-      "require": {
-        "psr/http-factory": "^1.0",
-        "psr/http-message": "^1.1 || ^2.0",
-        "ralouphie/getallheaders": "^3.0",
-        "php": "^7.2.5 || ^8.0"
-      },
-      "dist": {
-        "url": "https://api.github.com/repos/guzzle/psr7/zipball/21dc724a0583619cd1652f673303492272778051",
-        "type": "zip",
-        "reference": "21dc724a0583619cd1652f673303492272778051",
-        "shasum": ""
-      }
-    },
-    {
-      "name": null,
-      "version": "v3.6.0-BETA1",
-      "version_normalized": "3.6.0.0-beta1",
-      "require": {},
-      "dist": null
-    },
-    {
       "name": "psr/http-client",
       "version": "1.0.3",
       "version_normalized": "1.0.3.0",
@@ -106,17 +92,16 @@
       }
     },
     {
-      "name": "psr/http-factory",
-      "version": "1.1.0",
-      "version_normalized": "1.1.0.0",
+      "name": "psr/log",
+      "version": "3.0.2",
+      "version_normalized": "3.0.2.0",
       "require": {
-        "psr/http-message": "^1.0 || ^2.0",
-        "php": ">=7.1"
+        "php": ">=8.0.0"
       },
       "dist": {
-        "url": "https://api.github.com/repos/php-fig/http-factory/zipball/2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
+        "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
         "type": "zip",
-        "reference": "2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
+        "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
         "shasum": ""
       }
     },
@@ -131,6 +116,21 @@
         "url": "https://api.github.com/repos/php-fig/http-message/zipball/402d35bcb92c70c026d1a6a9883f06b2ead23d71",
         "type": "zip",
         "reference": "402d35bcb92c70c026d1a6a9883f06b2ead23d71",
+        "shasum": ""
+      }
+    },
+    {
+      "name": "psr/http-factory",
+      "version": "1.1.0",
+      "version_normalized": "1.1.0.0",
+      "require": {
+        "php": ">=7.1",
+        "psr/http-message": "^1.0 || ^2.0"
+      },
+      "dist": {
+        "url": "https://api.github.com/repos/php-fig/http-factory/zipball/2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
+        "type": "zip",
+        "reference": "2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
         "shasum": ""
       }
     },
