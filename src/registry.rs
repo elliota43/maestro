@@ -114,18 +114,18 @@ impl RegistryClient {
 
         let text = resp.text().await?;
 
-        let parsed: PackagistResponse = match serde_json::from_str(&text) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("JSON Parse Error: {}", e);
-                eprintln!("Response: {:.500}", text);
-                anyhow::bail!("Failed to parse Packagist JSON");
-            }
-        };
+        let parsed: PackagistResponse = match serde_json::from_str(&text)?;
 
-        parsed.packages
+        let mut versions = parsed.packages
             .get(name)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Package {} not found in response", name))
+            .ok_or_else(|| anyhow::anyhow!("Package {} not found", name))?;
+
+        for v in &mut versions {
+            if v.name.is_none() {
+                v.name = Some(name.to_string());
+            }
+        }
+        Ok(versions)
     }
 }
