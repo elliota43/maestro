@@ -3,6 +3,7 @@ mod registry;
 mod semver_compat;
 mod installer;
 mod generator;
+mod cache;
 
 use manifest::ComposerManifest;
 use registry::{RegistryClient, PackageVersion};

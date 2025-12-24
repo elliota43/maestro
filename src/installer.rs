@@ -2,24 +2,38 @@ use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 use anyhow::{Context, Result};
+use crate::cache::Cache;
 
 pub async fn install_package(name: &str, version: &str, url: &str) -> Result<()> {
-    println!("Downloading {} v{}...", name, version);
+    let cache = Cache::new();
+    let cache_path = cache.get_dist_path(name, version);
 
-    let client = reqwest::Client::builder()
-        .user_agent("Maestro/0.1")
-        .build()?;
+    let bytes: Vec<u8>;
 
-    let response = client.get(url).send().await?;
-    if !response.status().is_success() {
-        anyhow::bail!("Download failed: {}", response.status());
+    if cache_path.exists() {
+        println!("    Using cached: {}", name);
+        bytes = fs::read(&cache_path)?;
+    } else {
+        println!("Downloading {}...", name);
+        println!("Downloading {} v{}...", name, version);
+
+        let client = reqwest::Client::builder()
+            .user_agent("Maestro/0.1")
+            .build()?;
+
+        let response = client.get(url).send().await?;
+        if !response.status().is_success() {
+            anyhow::bail!("Download failed: {}", response.status());
+        }
+        bytes = response.bytes().await?.to_vec();
+
+        // save to cache
+        let _ = fs::write(&cache_path, &bytes);
     }
-    let bytes = response.bytes().await?;
 
+    // extract
     let install_dir = format!("vendor/{}", name);
     let path = Path::new(&install_dir);
-
-    // Clean up previous install if exists
     if path.exists() {
         fs::remove_dir_all(path).context("Failed to clean existing directory")?;
     }

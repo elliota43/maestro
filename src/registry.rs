@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Deserializer};
 use anyhow::{Result, Context};
+use std::fs;
+use crate::cache::Cache;
 
 #[derive(Debug, Deserialize)]
 pub struct PackagistResponse {
@@ -68,6 +70,7 @@ where
 pub struct RegistryClient {
     client: reqwest::Client,
     base_url: String,
+    cache: Cache,
 }
 
 impl RegistryClient {
@@ -78,10 +81,25 @@ impl RegistryClient {
                 .build()
                 .unwrap(),
             base_url: "https://repo.packagist.org/p2".to_string(),
+            cache: Cache::new(),
         }
     }
 
     pub async fn get_package_metadata(&self, name: &str) -> Result<Vec<PackageVersion>> {
+
+        // check cache
+        let cache_path = self.cache.get_metadata_path(name);
+
+        if cache_path.exists() {
+            if let Ok(content) = fs::read_to_string(&cache_path) {
+                if let Ok(parsed) = serde_json::from_str::<PackagistResponse>(&content) {
+                    if let Some(versions) = parsed.packages.get(name) {
+                        return Ok(versions.clone());
+                    }
+                }
+            }
+        }
+
         let url = format!("{}/{}.json", self.base_url, name);
         println!("Fetching metadata for: {}", url);
 
