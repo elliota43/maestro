@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use anyhow::{Result, Context};
 
 #[derive(Debug, Deserialize)]
@@ -15,7 +15,7 @@ pub struct PackageVersion {
     #[serde(alias = "version_normalized", default)]
     pub version_normalized: String,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_packagist_map")]
     pub require: HashMap<String, String>,
     pub dist: Option<DistInfo>,
 }
@@ -32,6 +32,39 @@ pub struct DistInfo {
     pub shasum: Option<String>,
 }
 
+// Helper fn:
+// Packagist sometimes sends "__unset" (str) instead of {}
+// this handles those instances so the program doesn't crash
+fn deserialize_packagist_map<'de, D>(deserializer: D) -> Result<HashMap<String, String>, D::Error>
+where
+    D: Deserializer<'de>, {
+
+    // convert to generic JSON Value first
+    let v: serde_json::Value = Deserialize::deserialize(deserializer)?;
+
+    match v {
+        // std case -> map
+        serde_json::Value::Object(obj) => {
+            let mut map = HashMap::new();
+            for (k, val) in obj {
+                if let serde_json::Value::String(s) = val {
+                    map.insert(k, s);
+                }
+            }
+            Ok(map)
+        }
+
+        // edge case: packagist says "remove all requirements"
+        serde_json::Value::String(s) if s == "__unset" => Ok(HashMap::new()),
+
+        // edge case: empty array [] is sometimes sent for empty maps in php
+        serde_json::Value::Array(_) => Ok(HashMap::new()),
+
+        // fallback: null or anything else -> empty map
+        _ => Ok(HashMap::new()),
+    }
+
+}
 pub struct RegistryClient {
     client: reqwest::Client,
     base_url: String,
