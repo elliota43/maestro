@@ -9,6 +9,8 @@ use semver_compat::to_rust_version;
 use anyhow::{Context, Result};
 use std::collections::{VecDeque, HashSet};
 use std::fs;
+use tokio::task::JoinSet;
+use colored::Colorize;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -23,38 +25,44 @@ async fn main() -> Result<()> {
     // set: Stores package_names already processed
     let mut installed: HashSet<String> = HashSet::new();
 
+    // Store install tasks
+    let mut download_list: Vec<(String, String, String)> = Vec::new();
+
     // prime queue with root dependencies
     for (name, constraint) in manifest.require {
         queue.push_back((name, constraint));
     }
 
-    println!("Starting resolution for {} dependencies...", queue.len());
-
+    println!("{}", "Resolving dependency graph...".bold().cyan());
+    let start_time = std::time::Instant::now();
     // process queue
     while let Some((pkg_name, version_constraint)) = queue.pop_front() {
         if installed.contains(&pkg_name) {
             continue;
         }
 
-        println!("Resolving: {} ({})", pkg_name, version_constraint);
-
         let best_package = match resolve_package(&client, &pkg_name, &version_constraint).await? {
             Some(pkg) => pkg,
             None => {
-                eprintln!("Warning: Could not resolve {} {}", pkg_name, version_constraint);
+                eprintln!("{} Warning: Could not resolve {} {}", "Warning:".yellow().bold(), pkg_name, version_constraint);
                 continue;
             }
         };
 
         println!(
-            "Selected: {} v{}",
-            best_package.name.as_deref().unwrap_or(&pkg_name),
-            best_package.version
+            "    - Locked: {} v{}",
+            best_package.name.as_deref().unwrap_or(&pkg_name).green(),
+            best_package.version.green()
         );
 
-        // Download
-        if let Some(dist) = &best_package.dist {
-            installer::install_package(&pkg_name, &best_package.version, &dist.url).await?;
+        // Queue for Download
+        if let Some(dist) = best_package.dist {
+            download_list.push((
+                pkg_name.clone(),
+                best_package.version.clone(),
+                dist.url.clone()
+
+            ));
         }
 
         // add pkg's dependencies to queue
@@ -72,7 +80,29 @@ async fn main() -> Result<()> {
         installed.insert(pkg_name);
     }
 
-    println!("All dependencies installed.");
+    println!("{}", format!("Resolution complete in {:.2?}", start_time.elapsed()).bold());    println!("Starting parallel download of {} packages...", download_list.len());
+    println!("{}", format!("Starting parallel download of {} packages...", download_list.len()).cyan());
+
+    // install (parallel)
+    let mut set = JoinSet::new();
+
+    for (name, version, url) in download_list {
+        // spawn lightweight thread for each download
+        set.spawn(async move {
+            installer::install_package(&name, &version, &url).await
+        });
+    }
+
+    let mut success_count = 0;
+    while let Some(res) = set.join_next().await {
+        match res {
+            Ok(Ok(_)) => success_count += 1,
+            Ok(Err(e)) => eprintln!("{} {} ", "Download failed:".red().bold(), e),
+            Err(e) => eprintln!("{} {}", "Task panic:".red().bold(), e),
+        }
+    }
+
+    println!("{} All {} packages installed successfully!", "Success:".green().bold(), success_count);
     Ok(())
 }
 
