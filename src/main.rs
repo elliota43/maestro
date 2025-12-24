@@ -16,6 +16,7 @@ use std::path::Path; // Need Path to check existence
 use tokio::task::JoinSet;
 use colored::Colorize;
 use clap::{Parser, Subcommand};
+use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(Parser)]
 #[command(name = "Maestro")]
@@ -124,8 +125,13 @@ async fn download_and_install(packages: Vec<PackageVersion>) -> Result<()> {
             download_list.push((name, pkg.version.clone(), dist.url.clone()));
         }
     }
+    println!("{}", format!("Downloading {} packages...", download_list.len()).cyan());
 
-    println!("{}", format!("Starting parallel download of {} packages...", download_list.len()).cyan());
+    // set up progress bar
+    let pb = ProgressBar::new(download_list.len() as u64);
+    pb.set_style(ProgressStyle::with_template(
+        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} packages ({eta})"
+    ).unwrap().progress_chars("#>-"));
 
     let mut set = JoinSet::new();
     for (name, version, url) in download_list {
@@ -137,13 +143,20 @@ async fn download_and_install(packages: Vec<PackageVersion>) -> Result<()> {
     let mut success_count = 0;
     while let Some(res) = set.join_next().await {
         match res {
-            Ok(Ok(_)) => success_count += 1,
-            Ok(Err(e)) => eprintln!("{} {}", "Download failed:".red().bold(), e),
-            Err(e) => eprintln!("{} {}", "Task panic:".red().bold(), e),
+            Ok(Ok(_)) => {
+                success_count += 1;
+                pb.inc(1);
+            },
+            Ok(Err(e)) => {
+                pb.println(format!("{} {}", "Failed:".red(), e));
+            },
+            Err(e) => {
+                pb.println(format!("{} {}", "Panic:".red(), e));
+            },
         }
     }
 
-    println!("{} All {} packages installed successfully!", "Success:".green().bold(), success_count);
+    pb.finish_with_message("Done");
 
     generator::generate_autoload("vendor")?;
     println!("{} Autoload files generated.", "Success:".green().bold());
@@ -191,7 +204,11 @@ async fn run_add(pkg_name: &str) -> Result<()> {
         .max_by_key(|v| to_rust_version(&v.version_normalized));
 
     let target_version = match latest {
-        Some(v) => format!("^{}", v.version),
+        Some(v) => {
+            // strip leading 'v' if present
+            let clean_ver = v.version.trim_start_matches('v');
+            format!("^{}", clean_ver)
+        },
         None => {
             println!("{}", "Warning: No stable version found.  Using latest unstable.".yellow());
             // fallback to latest if no stable exists

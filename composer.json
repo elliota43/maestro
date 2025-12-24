@@ -2,8 +2,8 @@
   "name": "test/project",
   "description": null,
   "require": {
-    "monolog/monolog": "^3.9.0",
-    "guzzlehttp/guzzle": "^7.0"
+    "guzzlehttp/guzzle": "^7.0",
+    "monolog/monolog": "^3.9.0"
   },
   "require-dev": {},
   "autoload": {
