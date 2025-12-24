@@ -101,7 +101,6 @@ impl RegistryClient {
         }
 
         let url = format!("{}/{}.json", self.base_url, name);
-        println!("Fetching metadata for: {}", url);
 
         let resp = self.client.get(&url)
             .send()
@@ -113,6 +112,11 @@ impl RegistryClient {
         }
 
         let text = resp.text().await?;
+
+        // Write to cache
+        if let Err(e) = fs::write(&cache_path, &text) {
+            eprintln!("Warning: Failed to write cache: {}", e);
+        }
 
         let parsed: PackagistResponse = serde_json::from_str(&text)?;
 

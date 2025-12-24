@@ -1,15 +1,16 @@
-use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use anyhow::Result;
 use crate::registry::PackageVersion;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LockFile {
+    #[serde(rename = "_readme")]
     pub _readme: Vec<String>,
+    #[serde(rename = "content-hash")]
     pub content_hash: String, // @todo
     pub packages: Vec<PackageVersion>,
-    #[serde(default)]
+    #[serde(rename = "packages-dev", default)]
     pub packages_dev: Vec<PackageVersion>, // Placeholder
 }
 

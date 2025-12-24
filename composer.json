@@ -2,8 +2,8 @@
   "name": "test/project",
   "description": "",
   "require": {
-    "guzzlehttp/guzzle": "^7.0",
     "symfony/console": "^8.0.1",
+    "guzzlehttp/guzzle": "^7.0",
     "monolog/monolog": "^3.9.0"
   },
   "require-dev": {},

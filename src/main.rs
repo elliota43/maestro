@@ -13,6 +13,7 @@ use anyhow::{Context, Result};
 use std::collections::{VecDeque, HashSet};
 use std::fs;
 use std::path::Path; // Need Path to check existence
+use std::sync::Arc;
 use tokio::task::JoinSet;
 use colored::Colorize;
 use clap::{Parser, Subcommand};
@@ -73,7 +74,7 @@ async fn run_update() -> Result<()> {
 
     let content = fs::read_to_string(path).context("Read composer.json failed")?;
     let manifest: ComposerManifest = serde_json::from_str(&content)?;
-    let client = RegistryClient::new();
+    let client = Arc::new(RegistryClient::new());
 
     let mut queue: VecDeque<(String, String)> = VecDeque::new();
     let mut installed_set: HashSet<String> = HashSet::new();
@@ -85,28 +86,53 @@ async fn run_update() -> Result<()> {
         queue.push_back((name, constraint));
     }
 
-    while let Some((pkg_name, version_constraint)) = queue.pop_front() {
-        if installed_set.contains(&pkg_name) { continue }
-
-        let best_package = match resolve_package(&client, &pkg_name, &version_constraint).await? {
-            Some(pkg) => pkg,
-            None => {
-                eprintln!("{} Could not resolve {} {}", "Warning:".yellow().bold(), pkg_name, version_constraint);
-                continue;
-            }
-        };
-
-        println!("   Locked: {} {}", best_package.name.as_deref().unwrap_or(&pkg_name).green(), best_package.version.green());
-
-        for (dep_name, dep_constraint) in &best_package.require {
-            if dep_name == "php" || dep_name.starts_with("ext-") { continue; }
-            if !installed_set.contains(dep_name) {
-                queue.push_back((dep_name.clone(), dep_constraint.clone()));
-            }
+    // Parallel resolution: fetch metadata for multiple packages at once
+    while !queue.is_empty() {
+        // Collect all packages that need resolution in this batch
+        let mut batch = Vec::new();
+        while let Some((pkg_name, version_constraint)) = queue.pop_front() {
+            if installed_set.contains(&pkg_name) { continue; }
+            batch.push((pkg_name, version_constraint));
         }
 
-        installed_set.insert(pkg_name.clone());
-        resolved_packages.push(best_package);
+        if batch.is_empty() { break; }
+
+        // Fetch metadata for all packages in parallel
+        let mut fetch_set = JoinSet::new();
+        for (pkg_name, version_constraint) in batch {
+            let client = Arc::clone(&client);
+            fetch_set.spawn(async move {
+                let result = resolve_package(&*client, &pkg_name, &version_constraint).await;
+                (pkg_name, version_constraint, result)
+            });
+        }
+
+        // Process results
+        while let Some(res) = fetch_set.join_next().await {
+            match res {
+                Ok((pkg_name, _version_constraint, Ok(Some(best_package)))) => {
+                    // Add dependencies to queue
+                    for (dep_name, dep_constraint) in &best_package.require {
+                        if dep_name == "php" || dep_name.starts_with("ext-") { continue; }
+                        if !installed_set.contains(dep_name) {
+                            queue.push_back((dep_name.clone(), dep_constraint.clone()));
+                        }
+                    }
+
+                    installed_set.insert(pkg_name.clone());
+                    resolved_packages.push(best_package);
+                }
+                Ok((pkg_name, version_constraint, Ok(None))) => {
+                    eprintln!("{} Could not resolve {} {}", "Warning:".yellow().bold(), pkg_name, version_constraint);
+                }
+                Ok((pkg_name, _, Err(e))) => {
+                    eprintln!("{} Error resolving {}: {}", "Warning:".yellow().bold(), pkg_name, e);
+                }
+                Err(e) => {
+                    eprintln!("{} Task panic: {}", "Warning:".yellow().bold(), e);
+                }
+            }
+        }
     }
 
     println!("{}", format!("Resolution complete in {:.2?}", start_time.elapsed()).bold());
