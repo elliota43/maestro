@@ -1,17 +1,17 @@
 use semver::{Version, VersionReq};
 
-pub fn to_rust_version(php_version: &str) -> Option<Version> {
-    // packagist normalized versions are typically "1.2.3.0"
-    // strip the last ".0" if its there
-    let clean_version = if php_version.matches('.').count() == 3 {
-        let last_dot = php_version.rfind('.').unwrap();
-        &php_version[..last_dot]
+pub fn to_rust_version(v: &str) -> Option<Version> {
+    // convert v1.2.3 -> 1.2.3
+   let clean = v.trim_start_matches('v');
+
+    let parts: Vec<&str> = clean.split('.').collect();
+    let standardized = if parts.len() > 3 {
+        format!("{}.{}.{}", parts[0], parts[1], parts[2])
     } else {
-        php_version
+        clean.to_string()
     };
 
-    Version::parse(clean_version).ok()
-
+    Version::parse(&standardized).ok()
 }
 
 pub fn version_matches(req_str: &str, version_str: &str) -> bool {

@@ -11,12 +11,8 @@ pub async fn install_package(name: &str, version: &str, url: &str) -> Result<()>
     let bytes: Vec<u8>;
 
     if cache_path.exists() {
-        println!("    Using cached: {}", name);
         bytes = fs::read(&cache_path)?;
     } else {
-        println!("Downloading {}...", name);
-        println!("Downloading {} v{}...", name, version);
-
         let client = reqwest::Client::builder()
             .user_agent("Maestro/0.1")
             .build()?;
@@ -38,8 +34,6 @@ pub async fn install_package(name: &str, version: &str, url: &str) -> Result<()>
         fs::remove_dir_all(path).context("Failed to clean existing directory")?;
     }
     fs::create_dir_all(path).context("Failed to create vendor directory")?;
-
-    println!("Extracting to {}...", install_dir);
     let cursor = Cursor::new(bytes); // Wrap bytes so zip can read them
     let mut archive = zip::ZipArchive::new(cursor).context("Failed to read zip archive")?;
 
@@ -76,8 +70,6 @@ pub async fn install_package(name: &str, version: &str, url: &str) -> Result<()>
         let mut outfile = fs::File::create(&outpath)?;
         std::io::copy(&mut file, &mut outfile)?;
     }
-
-    println!("Installed {} v{}", name, version);
 
     Ok(())
 }

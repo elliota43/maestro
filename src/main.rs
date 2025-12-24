@@ -114,6 +114,9 @@ async fn run_update() -> Result<()> {
     let lock_data = lock::LockFile::new(resolved_packages.clone());
     lock_data.save(lock_path)?;
     println!("{}", "Generated composer.lock".green());
+    
+    download_and_install(resolved_packages).await?;
+    
     Ok(())
 }
 
@@ -156,7 +159,7 @@ async fn download_and_install(packages: Vec<PackageVersion>) -> Result<()> {
         }
     }
 
-    pb.finish_with_message("Done");
+    pb.finish_with_message(format!("Installed {} packages", success_count));
 
     generator::generate_autoload("vendor")?;
     println!("{} Autoload files generated.", "Success:".green().bold());
