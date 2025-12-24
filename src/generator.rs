@@ -72,9 +72,9 @@ pub fn generate_autoload(vendor_dir: &str) -> Result<()> {
     // write the main entry point: vendor/autoload.php
     let main_autoload = r#"<php
 
-    require_once __DIR__ . '/composer/autoload_real.php';
+require_once __DIR__ . '/composer/autoload_real.php';
 
-    return ComposerAutoloadInitMaestro::getLoader();
+return ComposerAutoloadInitMaestro::getLoader();
     "#;
 
     fs::write(composer_dir.join("autoload.php"), main_autoload)?;
@@ -83,34 +83,34 @@ pub fn generate_autoload(vendor_dir: &str) -> Result<()> {
 
     let real_autoload = r#"<?php
 
-    class ComposerAutoloaderInitMaestro {
+class ComposerAutoloaderInitMaestro {
 
-        private static $loader;
+    private static $loader;
 
-        public static function loadClassLoader($class) {
-            if ('Composer\Autoload\ClassLoader' === $class) {
-                require __DIR__ . '/ClassLoader.php';
-            }
+    public static function loadClassLoader($class) {
+        if ('Composer\Autoload\ClassLoader' === $class) {
+            require __DIR__ . '/ClassLoader.php';
+        }
+    }
+
+    public static function getLoader() {
+        if (null !== self::$loader) {
+            return self::$loader;
         }
 
-        public static function getLoader() {
-            if (null !== self::$loader) {
-                return self::$loader;
-            }
+        spl_autoload_register(array('ComposerAutoloaderInitMaestro', 'loadClassLoader'), true, true);
+        self::$loader = $loader = new \Composer\Autoload\ClassLoader();
+        spl_autoload_unregister(array('ComposerAutoloaderInitMaestro', 'loadClassLoader'));
 
-            spl_autoload_register(array('ComposerAutoloaderInitMaestro', 'loadClassLoader'), true, true);
-            self::$loader = $loader = new \Composer\Autoload\ClassLoader();
-            spl_autoload_unregister(array('ComposerAutoloaderInitMaestro', 'loadClassLoader'));
-
-            $map = require __DIR__ . '/autoload_psr4.php';
-            foreach ($map as $namespace => $path) {
-                $loader->setPsr4($namespace, $path);
-            }
-
-            $loader->register(true);
-            return $loader;
+        $map = require __DIR__ . '/autoload_psr4.php';
+        foreach ($map as $namespace => $path) {
+            $loader->setPsr4($namespace, $path);
         }
-    }"#;
+
+        $loader->register(true);
+        return $loader;
+    }
+}"#;
 
     fs::write(composer_dir.join("autoload_real.php"), real_autoload)?;
 
