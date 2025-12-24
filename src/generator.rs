@@ -3,9 +3,10 @@ use std::fs;
 use std::path::Path;
 use anyhow::{Context, Result};
 use crate::manifest::ComposerManifest;
+use colored::Colorize;
 
 pub fn generate_autoload(vendor_dir: &str) -> Result<()> {
-    println!("dumping autoload files...");
+    println!("{}", "Generating autoload files...".cyan());
 
     let mut psr4_map: HashMap<String, Vec<String>> = HashMap::new();
     let vendor_path = Path::new(vendor_dir);
@@ -14,7 +15,7 @@ pub fn generate_autoload(vendor_dir: &str) -> Result<()> {
     // structure: vendor/VENDOR/PACKAGE/composer.json
     for entry in fs::read_dir(vendor_path)? {
         let entry = entry?;
-        if !entry.path().is_dir() { continue; } // skip files (i.e. autoload.php)
+        if !entry.path().is_dir() { continue; } 
 
         // "vendor_name" dir (i.e. "monolog")
         for pkg_entry in fs::read_dir(entry.path())? {
@@ -26,10 +27,9 @@ pub fn generate_autoload(vendor_dir: &str) -> Result<()> {
 
             // parse packages's composer.json
             let content = fs::read_to_string(&composer_path)?;
-
             let manifest: ComposerManifest = match serde_json::from_str(&content) {
                 Ok(m) => m,
-                Err(_) => continue, // skip malformed json
+                Err(_) => continue, 
             };
 
             // extract psr-4 rules
@@ -44,11 +44,8 @@ pub fn generate_autoload(vendor_dir: &str) -> Result<()> {
                 // add to map
                 psr4_map.entry(namespace).or_default().push(full_path);
             }
-
         }
     }
-
-    // write vendor/composer/autoload_psr4.php
     let composer_dir = vendor_path.join("composer");
     fs::create_dir_all(&composer_dir)?;
 
@@ -60,31 +57,28 @@ pub fn generate_autoload(vendor_dir: &str) -> Result<()> {
         for p in paths {
             php_content.push_str(&format!("{}, ", p));
         }
-
         php_content.push_str("),\n");
     }
-
     php_content.push_str(");\n");
 
     fs::write(composer_dir.join("autoload_psr4.php"), php_content)
         .context("Failed to write autoload_psr4.php")?;
 
     // write the main entry point: vendor/autoload.php
-    let main_autoload = r#"<php
+    let main_autoload = r#"<?php
 
 require_once __DIR__ . '/composer/autoload_real.php';
 
-return ComposerAutoloadInitMaestro::getLoader();
-    "#;
+return ComposerAutoloaderInitMaestro::getLoader();
+"#;
 
-    fs::write(composer_dir.join("autoload.php"), main_autoload)?;
+    fs::write(vendor_path.join("autoload.php"), main_autoload)?;
 
     // write the real autoloader (simplified version of composer's
 
     let real_autoload = r#"<?php
 
 class ComposerAutoloaderInitMaestro {
-
     private static $loader;
 
     public static function loadClassLoader($class) {
@@ -104,17 +98,120 @@ class ComposerAutoloaderInitMaestro {
 
         $map = require __DIR__ . '/autoload_psr4.php';
         foreach ($map as $namespace => $path) {
-            $loader->setPsr4($namespace, $path);
+            $loader->addPsr4($namespace, $path);
         }
 
         $loader->register(true);
         return $loader;
     }
-}"#;
+}
+"#;
 
     fs::write(composer_dir.join("autoload_real.php"), real_autoload)?;
 
-    //
+    // lightweight ClassLoader.php - psr-4 compatible
+    let class_loader_source = r#"<?php
+
+namespace Composer\Autoload;
+
+/**
+ * A lightweight PSR-4 ClassLoader for Maestro
+ */
+class ClassLoader
+{
+    private $prefixLengthsPsr4 = array();
+    private $prefixDirsPsr4 = array();
+    private $fallbackDirsPsr4 = array();
+
+    public function getPrefixesPsr4()
+    {
+        return $this->prefixDirsPsr4;
+    }
+
+    public function addPsr4($prefix, $paths, $prepend = false)
+    {
+        if (!$prefix) {
+            if ($prepend) {
+                $this->fallbackDirsPsr4 = array_merge((array) $paths, $this->fallbackDirsPsr4);
+            } else {
+                $this->fallbackDirsPsr4 = array_merge($this->fallbackDirsPsr4, (array) $paths);
+            }
+        } elseif (!isset($this->prefixDirsPsr4[$prefix])) {
+            $length = strlen($prefix);
+            if ('\\' !== $prefix[$length - 1]) {
+                throw new \InvalidArgumentException("A non-empty PSR-4 prefix must end with a namespace separator.");
+            }
+            $this->prefixLengthsPsr4[$prefix[0]][$prefix] = $length;
+            $this->prefixDirsPsr4[$prefix] = (array) $paths;
+        } else {
+            if ($prepend) {
+                $this->prefixDirsPsr4[$prefix] = array_merge((array) $paths, $this->prefixDirsPsr4[$prefix]);
+            } else {
+                $this->prefixDirsPsr4[$prefix] = array_merge($this->prefixDirsPsr4[$prefix], (array) $paths);
+            }
+        }
+    }
+
+    public function register($prepend = false)
+    {
+        spl_autoload_register(array($this, 'loadClass'), true, $prepend);
+    }
+
+    public function unregister()
+    {
+        spl_autoload_unregister(array($this, 'loadClass'));
+    }
+
+    public function loadClass($class)
+    {
+        if ($file = $this->findFile($class)) {
+            includeFile($file);
+            return true;
+        }
+        return null;
+    }
+
+    public function findFile($class)
+    {
+        if ('\\' == $class[0]) {
+            $class = substr($class, 1);
+        }
+
+        $logicalPathPsr4 = strtr($class, '\\', DIRECTORY_SEPARATOR) . '.php';
+        $first = $class[0];
+
+        if (isset($this->prefixLengthsPsr4[$first])) {
+            foreach ($this->prefixLengthsPsr4[$first] as $prefix => $length) {
+                if (0 === strpos($class, $prefix)) {
+                    foreach ($this->prefixDirsPsr4[$prefix] as $dir) {
+                        if (file_exists($file = $dir . DIRECTORY_SEPARATOR . substr($logicalPathPsr4, $length))) {
+                            return $file;
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach ($this->fallbackDirsPsr4 as $dir) {
+            if (file_exists($file = $dir . DIRECTORY_SEPARATOR . $logicalPathPsr4)) {
+                return $file;
+            }
+        }
+
+        return false;
+    }
+}
+
+function includeFile($file)
+{
+    include $file;
+}
+"#;
+
+    fs::write(composer_dir.join("ClassLoader.php"), class_loader_source)?;
+
+    println!("{}", "Generated vendor/composer/ClassLoader.php".green());
 
     Ok(())
+
 }
