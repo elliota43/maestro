@@ -4,6 +4,7 @@ mod semver_compat;
 mod installer;
 mod generator;
 mod cache;
+mod lock; // <--- Register module
 
 use manifest::ComposerManifest;
 use registry::{RegistryClient, PackageVersion};
@@ -11,85 +12,93 @@ use semver_compat::to_rust_version;
 use anyhow::{Context, Result};
 use std::collections::{VecDeque, HashSet};
 use std::fs;
+use std::path::Path; // Need Path to check existence
 use tokio::task::JoinSet;
 use colored::Colorize;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let path = "composer.json";
+    let lock_path = "composer.lock";
+
     let content = fs::read_to_string(path).context("Read failed")?;
     let manifest: ComposerManifest = serde_json::from_str(&content)?;
-    let client = RegistryClient::new();
 
-    // Queue: Stores (package_name, version_constraint)
-    let mut queue: VecDeque<(String, String)> = VecDeque::new();
+    // We will populate this list from either the Lockfile OR the Resolver
+    let packages_to_install: Vec<PackageVersion>;
 
-    // set: Stores package_names already processed
-    let mut installed: HashSet<String> = HashSet::new();
+    if Path::new(lock_path).exists() {
+        // install from lockfile
+        println!("{}", "Lockfile found. Installing from composer.lock...".bold().cyan());
+        let lockfile = lock::LockFile::load(lock_path).context("Failed to read lockfile")?;
+        packages_to_install = lockfile.packages;
+        println!("   Loaded {} packages from lock.", packages_to_install.len());
+    } else {
+        // resolve dependencies & update
+        
+        println!("{}", "No lockfile found. Resolving dependencies...".bold().cyan());
+        let client = RegistryClient::new();
+        let mut queue: VecDeque<(String, String)> = VecDeque::new();
+        let mut installed_set: HashSet<String> = HashSet::new();
+        let mut resolved_packages: Vec<PackageVersion> = Vec::new();
 
-    // Store install tasks
-    let mut download_list: Vec<(String, String, String)> = Vec::new();
+        let start_time = std::time::Instant::now();
 
-    // prime queue with root dependencies
-    for (name, constraint) in manifest.require {
-        queue.push_back((name, constraint));
+        // Prime queue
+        for (name, constraint) in manifest.require {
+            queue.push_back((name, constraint));
+        }
+
+        while let Some((pkg_name, version_constraint)) = queue.pop_front() {
+            if installed_set.contains(&pkg_name) { continue; }
+
+            let best_package = match resolve_package(&client, &pkg_name, &version_constraint).await? {
+                Some(pkg) => pkg,
+                None => {
+                    eprintln!("{} Could not resolve {} {}", "Warning:".yellow().bold(), pkg_name, version_constraint);
+                    continue;
+                }
+            };
+
+            println!("   Locked: {} {}", best_package.name.as_deref().unwrap_or(&pkg_name).green(), best_package.version.green());
+
+            // Add dependencies to queue
+            for (dep_name, dep_constraint) in &best_package.require {
+                if dep_name == "php" || dep_name.starts_with("ext-") { continue; }
+                if !installed_set.contains(dep_name) {
+                    queue.push_back((dep_name.clone(), dep_constraint.clone()));
+                }
+            }
+
+            installed_set.insert(pkg_name.clone());
+            resolved_packages.push(best_package);
+        }
+
+        println!("{}", format!("Resolution complete in {:.2?}", start_time.elapsed()).bold());
+
+        // WRITE LOCKFILE
+        let lock_data = lock::LockFile::new(resolved_packages.clone());
+        lock_data.save(lock_path)?;
+        println!("{}", "Generated composer.lock".green());
+
+        packages_to_install = resolved_packages;
     }
 
-    println!("{}", "Resolving dependency graph...".bold().cyan());
-    let start_time = std::time::Instant::now();
-    // process queue
-    while let Some((pkg_name, version_constraint)) = queue.pop_front() {
-        if installed.contains(&pkg_name) {
-            continue;
+    // Convert PackageVersion structs into the download format (name, version, url)
+    let mut download_list = Vec::new();
+    for pkg in &packages_to_install {
+        if let Some(dist) = &pkg.dist {
+            // Some packages might have missing names in the struct if they came from minimal JSON,
+            // but usually they are populated.
+            let name = pkg.name.clone().unwrap_or_else(|| "unknown".to_string());
+            download_list.push((name, pkg.version.clone(), dist.url.clone()));
         }
-
-        let best_package = match resolve_package(&client, &pkg_name, &version_constraint).await? {
-            Some(pkg) => pkg,
-            None => {
-                eprintln!("{} Warning: Could not resolve {} {}", "Warning:".yellow().bold(), pkg_name, version_constraint);
-                continue;
-            }
-        };
-
-        println!(
-            "    - Locked: {} v{}",
-            best_package.name.as_deref().unwrap_or(&pkg_name).green(),
-            best_package.version.green()
-        );
-
-        // Queue for Download
-        if let Some(dist) = best_package.dist {
-            download_list.push((
-                pkg_name.clone(),
-                best_package.version.clone(),
-                dist.url.clone()
-
-            ));
-        }
-
-        // add pkg's dependencies to queue
-        for (dep_name, dep_constraint) in best_package.require {
-            if dep_name == "php" || dep_name.starts_with("ext-") {
-                continue; // skip platform requirements
-            }
-
-            if !installed.contains(&dep_name) {
-                queue.push_back((dep_name, dep_constraint));
-            }
-        }
-
-        // mark installed
-        installed.insert(pkg_name);
     }
 
-    println!("{}", format!("Resolution complete in {:.2?}", start_time.elapsed()).bold());    println!("Starting parallel download of {} packages...", download_list.len());
     println!("{}", format!("Starting parallel download of {} packages...", download_list.len()).cyan());
 
-    // install (parallel)
     let mut set = JoinSet::new();
-
     for (name, version, url) in download_list {
-        // spawn lightweight thread for each download
         set.spawn(async move {
             installer::install_package(&name, &version, &url).await
         });
@@ -99,16 +108,16 @@ async fn main() -> Result<()> {
     while let Some(res) = set.join_next().await {
         match res {
             Ok(Ok(_)) => success_count += 1,
-            Ok(Err(e)) => eprintln!("{} {} ", "Download failed:".red().bold(), e),
+            Ok(Err(e)) => eprintln!("{} {}", "Download failed:".red().bold(), e),
             Err(e) => eprintln!("{} {}", "Task panic:".red().bold(), e),
         }
     }
 
     println!("{} All {} packages installed successfully!", "Success:".green().bold(), success_count);
 
-    // generate autoload
     generator::generate_autoload("vendor")?;
-    println!("{} Autoload files generated:", "Success:".green().bold());
+    println!("{} Autoload files generated.", "Success:".green().bold());
+
     Ok(())
 }
 
@@ -135,7 +144,5 @@ async fn resolve_package(
     }
 
     compatible_versions.sort_by(|a, b| a.1.cmp(&b.1));
-
-    // return clone of the best package
-    Ok(compatible_versions.last().map(|(pkg, _)| (*pkg).clone()))
+    Ok(compatible_versions.last().map(|(pkg, _)| (**pkg).clone()))
 }

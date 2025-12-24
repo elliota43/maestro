@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use anyhow::{Result, Context};
 use std::fs;
 use crate::cache::Cache;
@@ -9,7 +9,7 @@ pub struct PackagistResponse {
     pub packages: HashMap<String, Vec<PackageVersion>>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PackageVersion {
     pub name: Option<String>,
     pub version: String,
@@ -22,7 +22,7 @@ pub struct PackageVersion {
     pub dist: Option<DistInfo>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DistInfo {
     pub url: String,
     pub r#type: String,
