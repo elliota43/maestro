@@ -7,3 +7,5 @@ target/
 **/mutants.out*
 
 vendor/
+
+.DS_STORE
