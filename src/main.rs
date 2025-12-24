@@ -15,81 +15,107 @@ use std::fs;
 use std::path::Path; // Need Path to check existence
 use tokio::task::JoinSet;
 use colored::Colorize;
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(name = "Maestro")]
+#[command(version = "0.1")]
+#[command(about = "A blazing fast PHP package manager written in Rust", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Install,
+    Update,
+}
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    // default: "install"
+    match cli.command.unwrap_or(Commands::Install) {
+        Commands::Install => run_install().await?,
+        Commands::Update => run_update().await?,
+    }
+
+    Ok(())
+}
+
+async fn run_install() -> Result<()> {
+    let lock_path = "composer.lock";
+    if Path::new(lock_path).exists() {
+        println!("{}", "Lockfile found. Installing locked dependencies...".bold().cyan());
+        let lockfile = lock::LockFile::load(lock_path).context("Failed to read lockfile")?;
+        download_and_install(lockfile.packages).await?;
+    } else {
+        println!("{}", "No lockfile found. Running resolution...".bold().cyan());
+        run_update().await?;
+    }
+
+    Ok(())
+}
+
+async fn run_update() -> Result<()> {
+    println!("{}", "Updating dependencies...".bold().cyan());
+
     let path = "composer.json";
     let lock_path = "composer.lock";
 
-    let content = fs::read_to_string(path).context("Read failed")?;
+    let content = fs::read_to_string(path).context("Read composer.json failed")?;
     let manifest: ComposerManifest = serde_json::from_str(&content)?;
+    let client = RegistryClient::new();
 
-    // We will populate this list from either the Lockfile OR the Resolver
-    let packages_to_install: Vec<PackageVersion>;
+    let mut queue: VecDeque<(String, String)> = VecDeque::new();
+    let mut installed_set: HashSet<String> = HashSet::new();
+    let mut resolved_packages: Vec<PackageVersion> = Vec::new();
 
-    if Path::new(lock_path).exists() {
-        // install from lockfile
-        println!("{}", "Lockfile found. Installing from composer.lock...".bold().cyan());
-        let lockfile = lock::LockFile::load(lock_path).context("Failed to read lockfile")?;
-        packages_to_install = lockfile.packages;
-        println!("   Loaded {} packages from lock.", packages_to_install.len());
-    } else {
-        // resolve dependencies & update
-        
-        println!("{}", "No lockfile found. Resolving dependencies...".bold().cyan());
-        let client = RegistryClient::new();
-        let mut queue: VecDeque<(String, String)> = VecDeque::new();
-        let mut installed_set: HashSet<String> = HashSet::new();
-        let mut resolved_packages: Vec<PackageVersion> = Vec::new();
+    let start_time = std::time::Instant::now();
 
-        let start_time = std::time::Instant::now();
-
-        // Prime queue
-        for (name, constraint) in manifest.require {
-            queue.push_back((name, constraint));
-        }
-
-        while let Some((pkg_name, version_constraint)) = queue.pop_front() {
-            if installed_set.contains(&pkg_name) { continue; }
-
-            let best_package = match resolve_package(&client, &pkg_name, &version_constraint).await? {
-                Some(pkg) => pkg,
-                None => {
-                    eprintln!("{} Could not resolve {} {}", "Warning:".yellow().bold(), pkg_name, version_constraint);
-                    continue;
-                }
-            };
-
-            println!("   Locked: {} {}", best_package.name.as_deref().unwrap_or(&pkg_name).green(), best_package.version.green());
-
-            // Add dependencies to queue
-            for (dep_name, dep_constraint) in &best_package.require {
-                if dep_name == "php" || dep_name.starts_with("ext-") { continue; }
-                if !installed_set.contains(dep_name) {
-                    queue.push_back((dep_name.clone(), dep_constraint.clone()));
-                }
-            }
-
-            installed_set.insert(pkg_name.clone());
-            resolved_packages.push(best_package);
-        }
-
-        println!("{}", format!("Resolution complete in {:.2?}", start_time.elapsed()).bold());
-
-        // WRITE LOCKFILE
-        let lock_data = lock::LockFile::new(resolved_packages.clone());
-        lock_data.save(lock_path)?;
-        println!("{}", "Generated composer.lock".green());
-
-        packages_to_install = resolved_packages;
+    for (name, constraint) in manifest.require {
+        queue.push_back((name, constraint));
     }
 
-    // Convert PackageVersion structs into the download format (name, version, url)
+    while let Some((pkg_name, version_constraint)) = queue.pop_front() {
+        if installed_set.contains(&pkg_name) { continue }
+
+        let best_package = match resolve_package(&client, &pkg_name, &version_constraint).await? {
+            Some(pkg) => pkg,
+            None => {
+                eprintln!("{} Could not resolve {} {}", "Warning:".yellow().bold(), pkg_name, version_constraint);
+                continue;
+            }
+        };
+
+        println!("   Locked: {} {}", best_package.name.as_deref().unwrap_or(&pkg_name).green(), best_package.version.green());
+
+        for (dep_name, dep_constraint) in &best_package.require {
+            if dep_name == "php" || dep_name.starts_with("ext-") { continue; }
+            if !installed_set.contains(dep_name) {
+                queue.push_back((dep_name.clone(), dep_constraint.clone()));
+            }
+        }
+
+        installed_set.insert(pkg_name.clone());
+        resolved_packages.push(best_package);
+    }
+
+    println!("{}", format!("Resolution complete in {:.2?}", start_time.elapsed()).bold());
+
+    let lock_data = lock::LockFile::new(resolved_packages.clone());
+    lock_data.save(lock_path)?;
+    println!("{}", "Generated composer.lock".green());
+    Ok(())
+}
+
+async fn download_and_install(packages: Vec<PackageVersion>) -> Result<()> {
     let mut download_list = Vec::new();
-    for pkg in &packages_to_install {
+    for pkg in &packages {
         if let Some(dist) = &pkg.dist {
-            // Some packages might have missing names in the struct if they came from minimal JSON,
-            // but usually they are populated.
             let name = pkg.name.clone().unwrap_or_else(|| "unknown".to_string());
             download_list.push((name, pkg.version.clone(), dist.url.clone()));
         }
@@ -120,7 +146,6 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-
 async fn resolve_package(
     client: &RegistryClient,
     pkg_name: &str,
